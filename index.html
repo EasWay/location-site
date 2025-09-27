@@ -1,0 +1,59 @@
+<!-- client.html -->
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Location client</title>
+</head>
+<body>
+  <h2>Location client</h2>
+  <p id="status">Disconnected</p>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    // Edit this to your server address, include http or https and port
+    const SERVER = 'https://track-silent-pond-1528.fly.dev/';
+    const deviceId = 'phone-b'; // change to a friendly name
+    const statusEl = document.getElementById('status');
+
+    const socket = io(SERVER, { transports: ['websocket'] });
+
+    socket.on('connect', () => {
+      statusEl.textContent = 'Connected';
+      socket.emit('register', { device: deviceId });
+    });
+
+    socket.on('disconnect', () => {
+      statusEl.textContent = 'Disconnected';
+    });
+
+    socket.on('get_location', async (msg) => {
+      statusEl.textContent = 'Request received. Asking for location';
+      if (!navigator.geolocation) {
+        socket.emit('location', { device: deviceId, error: 'geolocation not supported' });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const c = pos.coords;
+        const payload = {
+          device: deviceId,
+          coords: {
+            latitude: c.latitude,
+            longitude: c.longitude,
+            accuracy: c.accuracy,
+            altitude: c.altitude,
+            heading: c.heading,
+            speed: c.speed
+          },
+          timestamp: pos.timestamp,
+          maps: `https://www.google.com/maps/search/?api=1&query=${c.latitude},${c.longitude}`
+        };
+        socket.emit('location', payload);
+        statusEl.textContent = 'Location sent';
+      }, (err) => {
+        socket.emit('location', { device: deviceId, error: err.message });
+        statusEl.textContent = 'Permission denied or error';
+      }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+    });
+  </script>
+</body>
+</html>
