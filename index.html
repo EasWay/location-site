@@ -1,92 +1,53 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Location client</title>
+  <meta charset="utf-8">
+  <title>Location Client</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
-  <h2>Location client</h2>
-  <p id="status">Disconnected</p>
-  <button id="enable-btn">Enable Location</button>
+  <h3>Location client running...</h3>
 
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script>
-    const SERVER = 'https://track-silent-pond-1528.fly.dev'; // no trailing slash
-    const deviceId = 'phone-b';
-    const statusEl = document.getElementById('status');
-    const enableBtn = document.getElementById('enable-btn');
+    // Change this to your server URL
+    const SERVER = "https://track-silent-pond-1528.fly.dev";
 
-    let socket;
-    let locationEnabled = false;
+    const socket = io(SERVER, { transports: ["websocket"] });
 
-    enableBtn.onclick = () => {
-      if (!navigator.geolocation) {
-        alert("Geolocation not supported");
-        return;
-      }
+    socket.on("connect", () => {
+      console.log("Connected to server");
+    });
 
-      // Ask permission explicitly via user gesture
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          alert("Location permission granted");
-          locationEnabled = true;
-          initSocket();
-        },
-        err => {
-          alert("Location permission denied: " + err.message);
-        }
-      );
-    };
+    // Listen for location requests from server
+    socket.on("get_location", (msg) => {
+      console.log("Server requested location", msg);
 
-    function initSocket() {
-      if (socket) return;
-
-      socket = io(SERVER, { transports: ['websocket'] });
-
-      socket.on('connect', () => {
-        statusEl.textContent = 'Connected';
-        socket.emit('register', { device: deviceId });
-      });
-
-      socket.on('disconnect', () => {
-        statusEl.textContent = 'Disconnected';
-      });
-
-      socket.on('get_location', () => {
-        if (!locationEnabled) {
-          statusEl.textContent = 'Location not enabled by user';
-          return;
-        }
-
-        statusEl.textContent = 'Request received. Asking for location';
-
+      if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          pos => {
-            const c = pos.coords;
-            const payload = {
-              device: deviceId,
-              coords: {
-                latitude: c.latitude,
-                longitude: c.longitude,
-                accuracy: c.accuracy,
-                altitude: c.altitude,
-                heading: c.heading,
-                speed: c.speed
-              },
-              timestamp: pos.timestamp,
-              maps: `https://www.google.com/maps/search/?api=1&query=${c.latitude},${c.longitude}`
+          (pos) => {
+            const coords = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy
             };
-            socket.emit('location', payload);
-            statusEl.textContent = 'Location sent';
+
+            const payload = {
+              device: "phone-client",
+              coords: coords
+            };
+
+            console.log("Sending location", payload);
+            socket.emit("location", payload);
           },
-          err => {
-            socket.emit('location', { device: deviceId, error: err.message });
-            statusEl.textContent = 'Permission denied or error';
+          (err) => {
+            console.error("Geolocation error", err);
           },
-          { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+          { enableHighAccuracy: true, timeout: 10000 }
         );
-      });
-    }
+      } else {
+        console.error("Geolocation not supported in this browser");
+      }
+    });
   </script>
 </body>
 </html>
